@@ -1,8 +1,13 @@
-require 'sinatra'
 require 'json'
+require 'pp'
+
+require 'sinatra'
 
 set :bind, '0.0.0.0'
 set :port, 9944
+
+def _get(*args, &blk) get(*args, &blk) ; end
+def _post(*args, &blk) get(*args, &blk) ; end
 
 $users = []
 
@@ -28,11 +33,11 @@ class User
   end
 end
 
-get '/' do
+_get '/' do
   urls = File.open(__FILE__).readlines
-    .grep(/^(?:get|post)/)
-    .map {|e| e.chop.sub(/'(?= ).*/, "'")}
-    .map {|e| "<li><a href='#{e.gsub(/.*'(.*)'.*/, '\1')}'>#{e}</a></li>"}
+    .grep(/^(?:get|post|delete|put)/)
+    .map {|e| e.chop.sub(/'(?= )[^#]+#?/, "' ")}
+    .map {|e| "<li><a href='#{e.gsub(/.*'(.*)'.*/, '\1')}'>#{e.gsub(/'(?= ).*/, '')}</a>#{e.gsub(/.*'(?= )/, ' -- ')}</li>"}
     .join("\n")
 
   return html_response <<-eod
@@ -48,7 +53,7 @@ get '/' do
 eod
 end
 
-get '/web/home' do
+get '/web/home' do # Web UI home page
   return html_response <<-eod
     <h1>Hi!</h1>
     <a href='/web/adduser'>add user</a>
@@ -57,7 +62,7 @@ get '/web/home' do
 eod
 end
 
-get '/web/adduser' do
+get '/web/adduser' do # Web interface to add user (does not add actually, just form)
   return html_response <<-eod
     <h1>#{request.path_info}</h1>
     <form method='post' action='/users/add2'>
@@ -71,7 +76,7 @@ get '/web/adduser' do
 eod
 end
 
-get '/web/listusers' do
+get '/web/listusers' do # Web page with table of all users
   user_lines = ""
   $users.each do |u|
     user_lines += "<tr><td>#{u.email}</td><td>#{u.first_name}</td><td>#{u.last_name}</td></tr>\n"
@@ -85,7 +90,7 @@ get '/web/listusers' do
 eod
 end
 
-get '/web/about' do
+get '/web/about' do # Web about page
   return html_response <<-eod
     <script>
       var tc1 = "Back to Home page";
@@ -112,7 +117,7 @@ get '/web/about' do
 eod
 end
 
-get '/math/plus' do
+get '/math/plus' do # REST Math operation plus for two arguments: /math/plus?a=1&b=2
   headers \
     'content-type' => 'application/json;charset=utf-8'
   begin
@@ -125,7 +130,7 @@ get '/math/plus' do
   end
 end
 
-get '/math/divide' do
+get '/math/divide' do # REST Math operation divide for two arguments: /math/divide?a=9&b=4
   headers \
     'content-type' => 'application/json;charset=utf-8'
   begin
@@ -138,7 +143,7 @@ get '/math/divide' do
   end
 end
 
-get '/users' do
+get '/users' do # REST service to list all users
   headers \
     'content-type' => 'application/json;charset=utf-8'
   email = params[:email]
@@ -156,15 +161,15 @@ get '/users' do
   end
 end
 
-delete '/users' do
+delete '/users' do # REST service to delete all users
   $users = []
 end
 
-post '/users/add2' do
+post '/users/add2' do # REST service UNUSED now
   STDERR.puts params[:email]
 end
 
-post '/users/add' do
+post '/users/add' do # REST service to add new user
   headers \
     'content-type' => 'application/json;charset=utf-8'
   data = JSON.parse request.body.read
@@ -187,14 +192,14 @@ post '/users/add' do
   end
 end
 
-get '*' do
+_get '*' do
   headers \
     'content-type' => 'application/json;charset=utf-8'
   status 422
   return json_error("unknown route: #{request.url}")
 end
 
-post '*' do
+_post '*' do
   headers \
     'content-type' => 'application/json;charset=utf-8'
   status 422
