@@ -1,5 +1,5 @@
-http://localhost:9944/# eduke-server
-simple http server for education for rest/web testing
+# eduke-server
+Simple http server for education for rest/web testing
 
 ## Requirements
 Ruby version 1.9+
