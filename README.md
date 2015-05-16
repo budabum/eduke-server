@@ -25,7 +25,7 @@ Ruby version 1.9+
 ```
 ruby eduke-server.rb
 ```
-Will run server on http://localhost:9944/
+Will run server on http://localhost:9944/ 
 
 ## Stop server
 CTRL+C in console
