@@ -1,5 +1,6 @@
 require 'json'
 require 'pp'
+require 'yaml'
 
 require 'sinatra'
 
@@ -9,14 +10,15 @@ set :port, 9944
 def _get(*args, &blk) get(*args, &blk) ; end
 def _post(*args, &blk) get(*args, &blk) ; end
 
-$users = []
+PERSISTENT_FILE = "eduke.yml"
 
 class User
-  attr_reader :email, :first_name, :last_name
-  def initialize(email, fn, ln)
+  attr_accessor :email, :first_name, :last_name, :phone
+  def initialize(email, fn, ln, phone)
     @email = email
     @first_name = fn
     @last_name = ln
+    @phone = phone
   end
 
   def as_hash
@@ -31,6 +33,18 @@ class User
   def to_json(*args)
     as_hash.to_json
   end
+end
+
+trap('INT') do
+  File.open(PERSISTENT_FILE, 'w+') do |f|
+    f.write(YAML.dump($users))
+  end
+end
+
+if File.exists?(PERSISTENT_FILE)
+  $users = YAML.load_file(PERSISTENT_FILE)
+else
+  $users = []
 end
 
 _get '/' do
@@ -143,7 +157,7 @@ get '/math/divide' do # REST Math operation divide for two arguments: /math/divi
   end
 end
 
-get '/users' do # REST service to list all users
+get '/users' do # REST service to list specified user (/users?email=a@b.c) or all users
   headers \
     'content-type' => 'application/json;charset=utf-8'
   email = params[:email]
@@ -161,8 +175,55 @@ get '/users' do # REST service to list all users
   end
 end
 
-delete '/users' do # REST service to delete all users
-  $users = []
+delete '/users' do # REST service to delete specified user (/users?email=a@b.c) or all users
+  headers \
+     'content-type' => 'application/json;charset=utf-8'
+  email = params[:email]
+  if email.nil?
+    status 200
+    $users = []
+    return json_response(users: $users)
+  else
+    if !user_exists?(email)
+      status 404
+      return json_error("User with '#{email}' not found")
+    else
+      delete_user(email)
+      status 200
+      return json_response(users: $users)
+    end
+  end
+end
+
+post '/users/edit' do # REST service to update details of specified user (/users/edit?email=)
+  headers \
+     'content-type' => 'application/json;charset=utf-8'
+  email = params[:email]
+  if email.nil?
+    status 422
+    return json_error("Required parameter 'email' is missed")
+  else
+    if !user_exists?(email)
+      status 404
+      return json_error("User with '#{email}' not found")
+    else
+      data = JSON.parse request.body.read
+      if data.nil?
+        return json_error("Empty request body",
+                          %Q^Expected someting like {"email":"user11@email.com", "firstName":"autotest", "lastName":"user"}^)
+      end
+      STDERR.puts "BODY: #{data}"
+      first_name = data['firstName']
+      last_name = data['lastName']
+      phone = data['phone']
+      user = get_user(email)
+      user.first_name = first_name
+      user.last_name = last_name
+      user.phone = phone
+      status 200
+      return json_response(users: $users, edited_user: user)
+    end
+  end
 end
 
 post '/users/add2' do # REST service UNUSED now
@@ -177,6 +238,7 @@ post '/users/add' do # REST service to add new user
   first_name = data['firstName']
   last_name = data['lastName']
   email = data['email']
+  phone = data['phone']
   required = [first_name, last_name, email]
   if required.include?(nil)
     # bad error example
@@ -186,8 +248,8 @@ post '/users/add' do # REST service to add new user
       return json_error("User with email: #{email} already exists")
     else
       status 201
-      user = add_user(email, last_name, first_name)
-      return json_response(user: user)
+      user = add_user(email, last_name, first_name, phone)
+      return json_response(users: $users, new_user: user)
     end
   end
 end
@@ -209,14 +271,18 @@ end
 
 private
 
-def add_user(email, last_name, first_name)
-  user = User.new email, last_name, first_name
+def add_user(email, last_name, first_name, phone)
+  user = User.new email, last_name, first_name, phone
   $users << user
   return user
 end
 
 def get_user(email)
   $users.select{|u| u.email == email}[0]
+end
+
+def delete_user(email)
+  $users.delete_if{|u| u.email == email}
 end
 
 def user_exists?(email)
